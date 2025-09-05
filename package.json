@@ -1,5 +1,5 @@
 {
-  "name": "tillsync"
+  "name": "tillsync",
   "type": "module",
   "scripts": {
     "dev": "vite",

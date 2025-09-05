@@ -4,7 +4,7 @@
 module.exports = {
   apps: [
     {
-      name: 'tillsync'
+      name: 'tillsync',
       script: 'npx',
       args: 'wrangler pages dev dist --d1=tillsync-production --local --ip 0.0.0.0 --port 3000',
       env: {

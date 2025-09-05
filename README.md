@@ -29,6 +29,9 @@
 Access the live application immediately:
 👉 **[Launch TillSync](https://3000-icy9y2qe478l7gtrq0kot-6532622b.e2b.dev)**
 
+### **GitHub Repository**
+⭐ **Star the repo**: https://github.com/KebasoMoses/TillSync
+
 ### **Option 2: Deploy Your Own**
 
 #### **Prerequisites**

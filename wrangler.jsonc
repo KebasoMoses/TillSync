@@ -24,8 +24,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "mpesa-reconciliation-production",
-      "database_id": "placeholder-will-be-replaced-after-creation"
+      "database_name": "tillsync-production",
+      "database_id": "placeholder-replace-with-actual-database-id"
     }
   ],
   // "ai": {

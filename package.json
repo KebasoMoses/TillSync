@@ -1,5 +1,5 @@
 {
-  "name": "mpesa-reconciliation-system",
+  "name": "tillsync"
   "type": "module",
   "scripts": {
     "dev": "vite",

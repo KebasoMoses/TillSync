@@ -393,7 +393,7 @@ app.get('/', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>M-Pesa Till Daily Reconciliation System</title>
+        <title>TillSync - M-Pesa Till Reconciliation System</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -448,8 +448,8 @@ app.get('/', (c) => {
                     <div class="flex items-center space-x-3">
                         <i class="fas fa-mobile-alt text-2xl"></i>
                         <div>
-                            <h1 class="text-2xl font-bold">M-Pesa Till Reconciliation</h1>
-                            <p class="text-mpesa-light-gray text-sm">Daily Transaction Management System</p>
+                            <h1 class="text-2xl font-bold">TillSync</h1>
+                            <p class="text-mpesa-light-gray text-sm">M-Pesa Till Reconciliation System</p>
                         </div>
                     </div>
                     <div class="text-right">

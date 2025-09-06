@@ -36,7 +36,10 @@ function initializeApp() {
     // Initialize form handlers
     initializeFormHandlers();
     
-    // Load dashboard data
+    // Initialize transactions table functionality
+    initializeTransactionsTable();
+    
+    // Load dashboard data (includes business settings)
     loadDashboard();
     
     // Load fee structure
@@ -112,6 +115,9 @@ function initializeFormHandlers() {
             submitTransaction();
         });
     }
+
+    // Load products for transaction dropdown
+    loadProductsForTransactionForm();
 }
 
 // Dashboard Functions
@@ -136,7 +142,13 @@ async function loadDashboard() {
 }
 
 function updateDashboardUI() {
-    const { summary, transactions } = currentData;
+    const { summary, transactions, businessSettings } = currentData;
+    
+    // Update business name in header
+    const businessNameDisplay = document.getElementById('business-name-display');
+    if (businessNameDisplay && businessSettings?.business_name) {
+        businessNameDisplay.textContent = businessSettings.business_name;
+    }
     
     // Update summary cards
     document.getElementById('mpesa-sales').textContent = formatCurrency(summary.total_mpesa_sales || 0);
@@ -238,15 +250,31 @@ function displayParsedResults(data) {
                         Valid Transactions (${validTransactions.length})
                     </h4>
                     <div class="space-y-2">
-                        ${validTransactions.map(t => `
+                        ${validTransactions.map((t, index) => `
                             <div class="bg-green-50 border border-green-200 rounded-lg p-3">
-                                <div class="flex justify-between items-start">
-                                    <div>
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="flex-1">
                                         <p class="font-medium">${t.customerName}</p>
                                         <p class="text-sm text-gray-600">${formatCurrency(t.amount)} - ${t.transactionReference}</p>
                                         <p class="text-xs text-gray-500">${t.time || 'Time not parsed'}</p>
                                     </div>
                                     <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Ready</span>
+                                </div>
+                                <div class="mt-2">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Product/Service:</label>
+                                    <select id="sms-product-${index}" class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-mpesa-green">
+                                        <option value="M-Pesa Payment">M-Pesa Payment (default)</option>
+                                        <option value="Airtime">Airtime</option>
+                                        <option value="Sugar">Sugar</option>
+                                        <option value="Cooking Oil">Cooking Oil</option>
+                                        <option value="Maize Flour">Maize Flour</option>
+                                        <option value="Rice">Rice</option>
+                                        <option value="Bread">Bread</option>
+                                        <option value="Milk">Milk</option>
+                                        <option value="Soap">Soap</option>
+                                        <option value="Tea Leaves">Tea Leaves</option>
+                                        <option value="Other">Other</option>
+                                    </select>
                                 </div>
                             </div>
                         `).join('')}
@@ -288,6 +316,17 @@ async function importTransactions() {
         return;
     }
     
+    // Collect selected products for each transaction
+    const transactionsWithProducts = validTransactions.map((transaction, index) => {
+        const productSelect = document.getElementById(`sms-product-${index}`);
+        const selectedProduct = productSelect ? productSelect.value : 'M-Pesa Payment';
+        
+        return {
+            ...transaction,
+            selectedProduct: selectedProduct
+        };
+    });
+    
     showLoading(true);
     
     try {
@@ -296,7 +335,7 @@ async function importTransactions() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ transactions: validTransactions })
+            body: JSON.stringify({ transactions: transactionsWithProducts })
         });
         
         const result = await response.json();
@@ -434,17 +473,30 @@ async function loadReportsData() {
     try {
         showLoading(true);
         
-        // Load current data if not already available
-        if (!currentData.summary) {
-            const response = await fetch('/api/dashboard');
-            const result = await response.json();
-            if (result.success) {
-                currentData = result.data;
-            }
+        // Setup period selector event listener
+        const periodSelect = document.getElementById('report-period');
+        const customDateRange = document.getElementById('custom-date-range');
+        
+        if (periodSelect && !periodSelect.hasEventListener) {
+            periodSelect.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    customDateRange?.classList.remove('hidden');
+                    // Set default dates
+                    const today = new Date().toISOString().split('T')[0];
+                    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                    document.getElementById('start-date').value = weekAgo;
+                    document.getElementById('end-date').value = today;
+                } else {
+                    customDateRange?.classList.add('hidden');
+                    loadReportsForPeriod(this.value);
+                }
+            });
+            periodSelect.hasEventListener = true;
         }
         
-        // Update reports UI
-        updateReportsUI();
+        // Load data for current period
+        const currentPeriod = periodSelect?.value || 'today';
+        await loadReportsForPeriod(currentPeriod);
         
         // Load fee structure if not already loaded
         if (!document.getElementById('fee-structure-table')?.innerHTML?.trim()) {
@@ -456,6 +508,55 @@ async function loadReportsData() {
         showError('Failed to load reports data');
     } finally {
         showLoading(false);
+    }
+}
+
+async function loadReportsForPeriod(period) {
+    let startDate, endDate;
+    const today = new Date().toISOString().split('T')[0];
+    
+    switch (period) {
+        case 'today':
+            startDate = endDate = today;
+            break;
+        case 'week':
+            startDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            endDate = today;
+            break;
+        case 'month':
+            const firstDay = new Date();
+            firstDay.setDate(1);
+            startDate = firstDay.toISOString().split('T')[0];
+            endDate = today;
+            break;
+        case 'custom':
+            startDate = document.getElementById('start-date')?.value;
+            endDate = document.getElementById('end-date')?.value;
+            if (!startDate || !endDate) {
+                showError('Please select both start and end dates');
+                return;
+            }
+            break;
+        default:
+            startDate = endDate = today;
+    }
+    
+    try {
+        const response = await fetch(`/api/reports/transactions?start_date=${startDate}&end_date=${endDate}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            currentData = {
+                transactions: result.data.transactions,
+                summary: result.data.summary,
+                reportPeriod: { startDate, endDate, period }
+            };
+            updateReportsUI();
+        } else {
+            showError('Failed to load reports data: ' + result.error);
+        }
+    } catch (error) {
+        showError('Network error loading reports: ' + error.message);
     }
 }
 
@@ -526,7 +627,14 @@ function updateTopProducts(transactions) {
 }
 
 function refreshReports() {
-    loadReportsData();
+    const periodSelect = document.getElementById('report-period');
+    const currentPeriod = periodSelect?.value || 'today';
+    
+    if (currentPeriod === 'custom') {
+        loadReportsForPeriod('custom');
+    } else {
+        loadReportsForPeriod(currentPeriod);
+    }
 }
 
 async function loadFeeStructure() {
@@ -794,7 +902,7 @@ async function loadProfileData() {
 }
 
 function populateBusinessForm() {
-    const fields = ['business-name', 'till-number', 'owner-name', 'phone-number', 'daily-target', 'alert-threshold'];
+    const fields = ['business-name', 'owner-name', 'phone-number', 'daily-target', 'alert-threshold'];
     
     fields.forEach(fieldId => {
         const element = document.getElementById(fieldId);
@@ -811,7 +919,7 @@ async function saveBusinessSettings(event) {
     
     const formData = {
         business_name: document.getElementById('business-name').value,
-        mpesa_till_number: document.getElementById('till-number').value,
+        mpesa_till_number: '', // Remove till number field
         owner_name: document.getElementById('owner-name').value,
         phone_number: document.getElementById('phone-number').value,
         daily_target: parseFloat(document.getElementById('daily-target').value) || 0,
@@ -835,10 +943,10 @@ async function saveBusinessSettings(event) {
             businessSettings = formData;
             showSuccess('Business settings saved successfully!');
             
-            // Update business name in header
-            const headerElement = document.querySelector('h1');
-            if (headerElement && formData.business_name) {
-                headerElement.innerHTML = `<i class="fas fa-cash-register mr-2"></i>${formData.business_name} - TillSync`;
+            // Update business name in header display
+            const businessNameDisplay = document.getElementById('business-name-display');
+            if (businessNameDisplay && formData.business_name) {
+                businessNameDisplay.textContent = formData.business_name;
             }
         } else {
             showError(result.error || 'Failed to save settings');
@@ -943,30 +1051,8 @@ function renderProductsList() {
 }
 
 function updateProductDropdown() {
-    const dropdown = document.getElementById('product-service');
-    if (!dropdown) return;
-    
-    // Keep existing options and add new products
-    const existingOptions = Array.from(dropdown.options).slice(0, 4); // Keep first 4 default options
-    
-    dropdown.innerHTML = '';
-    existingOptions.forEach(option => dropdown.appendChild(option));
-    
-    // Add separator if products exist
-    if (userProducts.length > 0) {
-        const separator = document.createElement('option');
-        separator.disabled = true;
-        separator.textContent = '--- Your Products ---';
-        dropdown.appendChild(separator);
-        
-        // Add user products
-        userProducts.forEach(product => {
-            const option = document.createElement('option');
-            option.value = product.name;
-            option.textContent = product.name;
-            dropdown.appendChild(option);
-        });
-    }
+    // Use the new function with current userProducts data
+    updateProductDropdownWithData(userProducts);
 }
 
 function logout() {
@@ -1029,6 +1115,140 @@ function exportToCSV() {
 function exportToPDF() {
     // Simple PDF export (in a real app, you'd use a proper PDF library)
     showSuccess('PDF export feature coming soon!');
+}
+
+// Export reports data (for date-range specific exports)
+function exportReportsData(format) {
+    if (format === 'csv') {
+        exportReportsToCSV();
+    } else if (format === 'pdf') {
+        exportReportsToPDF();
+    }
+}
+
+function exportReportsToCSV() {
+    const transactions = currentData?.transactions || [];
+    
+    if (transactions.length === 0) {
+        showError('No transactions to export for the selected period');
+        return;
+    }
+    
+    const reportPeriod = currentData?.reportPeriod || {};
+    const periodDescription = reportPeriod.period === 'custom' 
+        ? `${reportPeriod.startDate}_to_${reportPeriod.endDate}`
+        : reportPeriod.period || 'today';
+    
+    // Enhanced headers for reports
+    const headers = [
+        'Date', 'Time', 'Type', 'Customer', 'Amount (KSh)', 'Reference', 
+        'Product/Service', 'M-Pesa Fee (KSh)', 'Net Amount (KSh)', 'Status'
+    ];
+    
+    const csvContent = [
+        `# TillSync Transaction Report - ${periodDescription.toUpperCase()}`,
+        `# Generated on: ${new Date().toLocaleString('en-KE')}`,
+        `# Total Transactions: ${transactions.length}`,
+        `# Total Revenue: KSh ${(currentData.summary?.combined_daily_revenue || 0).toLocaleString('en-KE')}`,
+        '',
+        headers.join(','),
+        ...transactions.map(t => {
+            const amount = t.transaction_type === 'mpesa' ? (t.amount_received || 0) : (t.cash_sale_amount || 0);
+            const mpesaFee = t.mpesa_fee || 0;
+            const netAmount = amount - mpesaFee;
+            
+            return [
+                t.date,
+                t.time,
+                t.transaction_type === 'mpesa' ? 'M-Pesa' : 'Cash',
+                `"${t.customer_name || 'N/A'}"`,
+                amount.toFixed(2),
+                t.transaction_reference || 'N/A',
+                `"${t.product_service || 'N/A'}"`,
+                mpesaFee.toFixed(2),
+                netAmount.toFixed(2),
+                t.verified ? 'Verified' : 'Pending'
+            ].join(',');
+        })
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tillsync-report-${periodDescription}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showSuccess('CSV report exported successfully!');
+}
+
+function exportReportsToPDF() {
+    showSuccess('PDF export for reports coming soon!');
+}
+
+// Load products for transaction form dropdown
+async function loadProductsForTransactionForm() {
+    try {
+        const response = await fetch('/api/products');
+        const result = await response.json();
+        
+        if (result.success) {
+            updateProductDropdownWithData(result.data);
+        }
+    } catch (error) {
+        console.error('Error loading products for transaction form:', error);
+    }
+}
+
+function updateProductDropdownWithData(products) {
+    const dropdown = document.getElementById('product-service');
+    if (!dropdown) return;
+    
+    // Store current value
+    const currentValue = dropdown.value;
+    
+    // Clear existing options and rebuild
+    dropdown.innerHTML = `
+        <option value="">Select product/service...</option>
+        <option value="Airtime">Airtime</option>
+        <option value="Sugar 2kg">Sugar 2kg</option>
+        <option value="Cooking Oil 1L">Cooking Oil 1L</option>
+        <option value="Maize Flour 2kg">Maize Flour 2kg</option>
+        <option value="Rice 2kg">Rice 2kg</option>
+        <option value="Bread">Bread</option>
+        <option value="Milk 1L">Milk 1L</option>
+        <option value="Soap">Soap</option>
+        <option value="Tea Leaves">Tea Leaves</option>
+    `;
+    
+    // Add separator if user products exist
+    if (products && products.length > 0) {
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '--- Your Custom Products ---';
+        separator.style.fontStyle = 'italic';
+        dropdown.appendChild(separator);
+        
+        // Add user products
+        products.forEach(product => {
+            const option = document.createElement('option');
+            option.value = product.name;
+            option.textContent = product.name;
+            dropdown.appendChild(option);
+        });
+    }
+    
+    // Add "Other" option at the end
+    const otherOption = document.createElement('option');
+    otherOption.value = 'Other';
+    otherOption.textContent = 'Other (specify in notes)';
+    dropdown.appendChild(otherOption);
+    
+    // Restore previous value if it still exists
+    if (currentValue) {
+        dropdown.value = currentValue;
+    }
 }
 
 // Initialize profile tab when it's activated
@@ -1112,9 +1332,10 @@ function filterAndRenderTransactions() {
     
     // Filter transactions
     filteredTransactions = transactionsData.filter(transaction => {
+        const displayAmount = transaction.transaction_type === 'mpesa' ? (transaction.amount_received || 0) : (transaction.cash_sale_amount || 0);
         const searchableText = [
             transaction.customer_name || '',
-            transaction.amount_received?.toString() || '',
+            displayAmount.toString() || '',
             transaction.time || '',
             transaction.transaction_reference || '',
             transaction.product_service || ''
@@ -1131,8 +1352,9 @@ function filterAndRenderTransactions() {
             
             // Special handling for different data types
             if (sortColumn === 'amount_received') {
-                aVal = parseFloat(aVal) || 0;
-                bVal = parseFloat(bVal) || 0;
+                // Use correct amount field based on transaction type
+                aVal = parseFloat(a.transaction_type === 'mpesa' ? (a.amount_received || 0) : (a.cash_sale_amount || 0));
+                bVal = parseFloat(b.transaction_type === 'mpesa' ? (b.amount_received || 0) : (b.cash_sale_amount || 0));
             } else if (sortColumn === 'time') {
                 aVal = new Date(`2000-01-01 ${aVal}`);
                 bVal = new Date(`2000-01-01 ${bVal}`);
@@ -1176,16 +1398,16 @@ function renderTransactionsTable() {
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${transaction.time}</td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            transaction.transaction_type === 'M-Pesa' 
+                            transaction.transaction_type === 'mpesa' 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-blue-100 text-blue-800'
                         }">
-                            ${transaction.transaction_type}
+                            ${transaction.transaction_type === 'mpesa' ? 'M-Pesa' : 'Cash'}
                         </span>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${transaction.customer_name || 'N/A'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
-                        KSh ${parseFloat(transaction.amount_received || 0).toLocaleString('en-KE', {minimumFractionDigits: 2})}
+                        KSh ${parseFloat(transaction.transaction_type === 'mpesa' ? (transaction.amount_received || 0) : (transaction.cash_sale_amount || 0)).toLocaleString('en-KE', {minimumFractionDigits: 2})}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${transaction.transaction_reference || 'N/A'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${transaction.product_service || 'N/A'}</td>
@@ -1215,14 +1437,14 @@ function renderTransactionsTable() {
                 <div class="bg-white rounded-lg border border-gray-200 p-4">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-lg font-bold text-green-600">
-                            KSh ${parseFloat(transaction.amount_received || 0).toLocaleString('en-KE', {minimumFractionDigits: 2})}
+                            KSh ${parseFloat(transaction.transaction_type === 'mpesa' ? (transaction.amount_received || 0) : (transaction.cash_sale_amount || 0)).toLocaleString('en-KE', {minimumFractionDigits: 2})}
                         </span>
                         <span class="px-2 py-1 text-xs font-semibold rounded-full ${
-                            transaction.transaction_type === 'M-Pesa' 
+                            transaction.transaction_type === 'mpesa' 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-blue-100 text-blue-800'
                         }">
-                            ${transaction.transaction_type}
+                            ${transaction.transaction_type === 'mpesa' ? 'M-Pesa' : 'Cash'}
                         </span>
                     </div>
                     <div class="space-y-1 text-sm">

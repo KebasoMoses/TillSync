@@ -26,76 +26,68 @@ async function initDatabase(db: D1Database) {
     console.log("Initializing database tables...");
     
     try {
-      // Create tables one by one to identify any issues
-      await db.prepare(`
-        CREATE TABLE IF NOT EXISTS business_settings (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          business_name TEXT DEFAULT 'My Kiosk',
-          mpesa_till_number TEXT,
-          owner_name TEXT,
-          phone_number TEXT,
-          daily_target REAL DEFAULT 0,
-          alert_threshold REAL DEFAULT 100,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
+      // Create business_settings table
+      await db.prepare(`CREATE TABLE IF NOT EXISTS business_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_name TEXT DEFAULT 'My Kiosk',
+        mpesa_till_number TEXT,
+        owner_name TEXT,
+        phone_number TEXT,
+        daily_target REAL DEFAULT 0,
+        alert_threshold REAL DEFAULT 100,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`).run();
 
-      await db.prepare(`
-        CREATE TABLE IF NOT EXISTS transactions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT NOT NULL,
-          time TEXT NOT NULL,
-          transaction_type TEXT NOT NULL,
-          customer_name TEXT,
-          amount_received REAL NOT NULL,
-          transaction_reference TEXT,
-          mpesa_fee REAL DEFAULT 0,
-          cash_sale_amount REAL DEFAULT 0,
-          product_service TEXT,
-          notes TEXT,
-          verified BOOLEAN DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
+      // Create transactions table
+      await db.prepare(`CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        time TEXT NOT NULL,
+        transaction_type TEXT NOT NULL,
+        customer_name TEXT,
+        amount_received REAL NOT NULL,
+        transaction_reference TEXT,
+        mpesa_fee REAL DEFAULT 0,
+        cash_sale_amount REAL DEFAULT 0,
+        product_service TEXT,
+        notes TEXT,
+        verified BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`).run();
 
-      await db.prepare(`
-        CREATE TABLE IF NOT EXISTS daily_summaries (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT UNIQUE NOT NULL,
-          total_mpesa_sales REAL DEFAULT 0,
-          total_cash_sales REAL DEFAULT 0,
-          total_mpesa_fees REAL DEFAULT 0,
-          net_mpesa_revenue REAL DEFAULT 0,
-          combined_daily_revenue REAL DEFAULT 0,
-          opening_float REAL DEFAULT 0,
-          closing_float REAL DEFAULT 0,
-          expected_cash_in_till REAL DEFAULT 0,
-          actual_cash_count REAL DEFAULT 0,
-          variance REAL DEFAULT 0,
-          variance_alert BOOLEAN DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
+      // Create daily_summaries table
+      await db.prepare(`CREATE TABLE IF NOT EXISTS daily_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT UNIQUE NOT NULL,
+        total_mpesa_sales REAL DEFAULT 0,
+        total_cash_sales REAL DEFAULT 0,
+        total_mpesa_fees REAL DEFAULT 0,
+        net_mpesa_revenue REAL DEFAULT 0,
+        combined_daily_revenue REAL DEFAULT 0,
+        opening_float REAL DEFAULT 0,
+        closing_float REAL DEFAULT 0,
+        expected_cash_in_till REAL DEFAULT 0,
+        actual_cash_count REAL DEFAULT 0,
+        variance REAL DEFAULT 0,
+        variance_alert BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`).run();
 
-      await db.prepare(`
-        CREATE TABLE IF NOT EXISTS products (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          category TEXT DEFAULT 'General',
-          is_active BOOLEAN DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
+      // Create products table
+      await db.prepare(`CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        category TEXT DEFAULT 'General',
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`).run();
 
       // Insert default business settings
-      await db.prepare(`
-        INSERT OR IGNORE INTO business_settings (id, business_name, alert_threshold) 
-        VALUES (1, 'My Kiosk', 100)
-      `).run();
+      await db.prepare(`INSERT OR IGNORE INTO business_settings (id, business_name, alert_threshold) VALUES (1, 'My Kiosk', 100)`).run();
 
       console.log("Database tables initialized successfully");
     } catch (error) {
@@ -115,6 +107,11 @@ app.get('/api/dashboard', async (c) => {
   const today = new Date().toISOString().split('T')[0];
   
   try {
+    // Get business settings
+    const businessSettings = await DB.prepare(`
+      SELECT * FROM business_settings WHERE id = 1
+    `).first();
+
     // Get today's transactions
     const transactions = await DB.prepare(`
       SELECT * FROM transactions 
@@ -163,6 +160,7 @@ app.get('/api/dashboard', async (c) => {
       data: {
         transactions: transactions.results || [],
         summary: calculatedSummary,
+        businessSettings: businessSettings || { business_name: 'My Kiosk' },
         date: today
       }
     });
@@ -323,7 +321,7 @@ app.post('/api/sms/import', async (c) => {
           transaction.amount,
           transaction.transactionReference,
           mpesa_fee,
-          'M-Pesa Payment',
+          transaction.selectedProduct || 'M-Pesa Payment',
           0 // Not verified initially
         ).run();
 
@@ -403,6 +401,63 @@ app.get('/api/sms/samples', async (c) => {
       description: 'Sample M-Pesa SMS formats for testing'
     }
   });
+});
+
+// Get transactions by date range for reports
+app.get('/api/reports/transactions', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  const { start_date, end_date } = c.req.query();
+  
+  if (!start_date || !end_date) {
+    return c.json({
+      success: false,
+      error: 'start_date and end_date parameters are required'
+    }, 400);
+  }
+  
+  try {
+    // Get transactions in date range
+    const transactions = await DB.prepare(`
+      SELECT * FROM transactions 
+      WHERE date >= ? AND date <= ? 
+      ORDER BY date DESC, time DESC
+    `).bind(start_date, end_date).all();
+
+    // Calculate totals
+    const mpesaTransactions = transactions.results?.filter((t: any) => t.transaction_type === 'mpesa') || [];
+    const cashTransactions = transactions.results?.filter((t: any) => t.transaction_type === 'cash') || [];
+    
+    const totalMpesaSales = mpesaTransactions.reduce((sum: number, t: any) => sum + (t.amount_received || 0), 0);
+    const totalCashSales = cashTransactions.reduce((sum: number, t: any) => sum + (t.cash_sale_amount || 0), 0);
+    const totalMpesaFees = mpesaTransactions.reduce((sum: number, t: any) => sum + (t.mpesa_fee || 0), 0);
+    
+    const summary = {
+      total_mpesa_sales: totalMpesaSales,
+      total_cash_sales: totalCashSales,
+      total_mpesa_fees: totalMpesaFees,
+      net_mpesa_revenue: totalMpesaSales - totalMpesaFees,
+      combined_daily_revenue: totalMpesaSales + totalCashSales,
+      transaction_count: transactions.results?.length || 0,
+      date_range: `${start_date} to ${end_date}`
+    };
+
+    return c.json({
+      success: true,
+      data: {
+        transactions: transactions.results || [],
+        summary: summary,
+        start_date,
+        end_date
+      }
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
 });
 
 // Business Settings API Routes
@@ -622,7 +677,7 @@ app.get('/', (c) => {
                     </div>
                     <div class="text-right">
                         <div class="text-lg font-semibold" id="current-date"></div>
-                        <div class="text-sm opacity-90">Mama Njeri Kiosk</div>
+                        <div class="text-sm opacity-90" id="business-name-display">My Kiosk</div>
                     </div>
                 </div>
             </div>
@@ -738,8 +793,8 @@ app.get('/', (c) => {
                                 <option value="">Sort by...</option>
                                 <option value="time-desc">Time (Newest)</option>
                                 <option value="time-asc">Time (Oldest)</option>
-                                <option value="amount-desc">Amount (High-Low)</option>
-                                <option value="amount-asc">Amount (Low-High)</option>
+                                <option value="amount_received-desc">Amount (High-Low)</option>
+                                <option value="amount_received-asc">Amount (Low-High)</option>
                                 <option value="customer">Customer Name</option>
                             </select>
                             <select id="rows-per-page" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
@@ -916,18 +971,9 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Product/Service Sold</label>
                                 <select id="product-service" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-mpesa-green">
-                                    <option value="">Select or type custom...</option>
-                                    <option value="Airtime">Airtime</option>
-                                    <option value="Sugar 2kg">Sugar 2kg</option>
-                                    <option value="Cooking Oil 1L">Cooking Oil 1L</option>
-                                    <option value="Maize Flour 2kg">Maize Flour 2kg</option>
-                                    <option value="Rice 2kg">Rice 2kg</option>
-                                    <option value="Bread">Bread</option>
-                                    <option value="Milk 1L">Milk 1L</option>
-                                    <option value="Soap">Soap</option>
-                                    <option value="Tea Leaves">Tea Leaves</option>
-                                    <option value="Other">Other</option>
+                                    <option value="">Loading products...</option>
                                 </select>
+                                <p class="text-xs text-gray-500 mt-1">Add custom products in Profile → Product Management</p>
                             </div>
 
                             <div>
@@ -958,15 +1004,28 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
                                 <i class="fas fa-chart-bar mr-2 text-mpesa-blue"></i>
                                 Business Reports & Analytics
                             </h2>
-                            <div class="flex gap-2">
+                            <div class="flex flex-col sm:flex-row gap-2">
                                 <select id="report-period" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
                                     <option value="today">Today</option>
                                     <option value="week">This Week</option>
                                     <option value="month">This Month</option>
+                                    <option value="custom">Custom Range</option>
                                 </select>
-                                <button onclick="refreshReports()" class="bg-mpesa-blue hover:bg-mpesa-dark-blue text-white px-4 py-2 rounded-lg text-sm">
-                                    <i class="fas fa-sync-alt mr-2"></i>Refresh
-                                </button>
+                                <div id="custom-date-range" class="hidden flex gap-2">
+                                    <input type="date" id="start-date" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
+                                    <input type="date" id="end-date" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="refreshReports()" class="bg-mpesa-blue hover:bg-mpesa-dark-blue text-white px-4 py-2 rounded-lg text-sm">
+                                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                    </button>
+                                    <button onclick="exportReportsData('csv')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">
+                                        <i class="fas fa-file-csv mr-2"></i>CSV
+                                    </button>
+                                    <button onclick="exportReportsData('pdf')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">
+                                        <i class="fas fa-file-pdf mr-2"></i>PDF
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1232,10 +1291,7 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
                                         <label class="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
                                         <input type="text" id="business-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="My Kiosk">
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">M-Pesa Till Number</label>
-                                        <input type="text" id="till-number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="123456">
-                                    </div>
+
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-2">Owner Name</label>
                                         <input type="text" id="owner-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="John Kamau">

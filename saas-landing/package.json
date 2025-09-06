@@ -1,0 +1,28 @@
+{
+  "name": "tillsync-saas",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "dev:sandbox": "wrangler pages dev dist --d1=tillsync-saas-production --local --ip 0.0.0.0 --port 4000",
+    "preview": "wrangler pages dev",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name tillsync-saas",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:migrate:local": "wrangler d1 migrations apply tillsync-saas-production --local",
+    "db:migrate:prod": "wrangler d1 migrations apply tillsync-saas-production",
+    "db:seed": "wrangler d1 execute tillsync-saas-production --local --file=./seed.sql",
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed",
+    "clean-port": "fuser -k 4000/tcp 2>/dev/null || true",
+    "test": "curl http://localhost:4000"
+  },
+  "dependencies": {
+    "hono": "^4.9.6"
+  },
+  "devDependencies": {
+    "@hono/vite-build": "^1.2.0",
+    "@hono/vite-dev-server": "^0.18.2",
+    "vite": "^6.3.5",
+    "wrangler": "^4.4.0"
+  }
+}

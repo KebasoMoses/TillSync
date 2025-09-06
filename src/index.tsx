@@ -22,76 +22,86 @@ async function initDatabase(db: D1Database) {
     // Check if tables exist by trying to query business_settings
     await db.prepare("SELECT id FROM business_settings LIMIT 1").first();
   } catch {
-    // Tables don't exist, create them
+    // Tables don't exist, create them individually
     console.log("Initializing database tables...");
     
-    const initScript = `
-      -- Business settings table
-      CREATE TABLE IF NOT EXISTS business_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        business_name TEXT DEFAULT 'My Kiosk',
-        mpesa_till_number TEXT,
-        owner_name TEXT,
-        phone_number TEXT,
-        daily_target REAL DEFAULT 0,
-        alert_threshold REAL DEFAULT 100,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+    try {
+      // Create tables one by one to identify any issues
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS business_settings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          business_name TEXT DEFAULT 'My Kiosk',
+          mpesa_till_number TEXT,
+          owner_name TEXT,
+          phone_number TEXT,
+          daily_target REAL DEFAULT 0,
+          alert_threshold REAL DEFAULT 100,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
 
-      -- Transactions table
-      CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
-        time TEXT NOT NULL,
-        transaction_type TEXT NOT NULL,
-        customer_name TEXT,
-        amount_received REAL NOT NULL,
-        transaction_reference TEXT,
-        mpesa_fee REAL DEFAULT 0,
-        cash_sale_amount REAL DEFAULT 0,
-        product_service TEXT,
-        notes TEXT,
-        verified BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS transactions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          time TEXT NOT NULL,
+          transaction_type TEXT NOT NULL,
+          customer_name TEXT,
+          amount_received REAL NOT NULL,
+          transaction_reference TEXT,
+          mpesa_fee REAL DEFAULT 0,
+          cash_sale_amount REAL DEFAULT 0,
+          product_service TEXT,
+          notes TEXT,
+          verified BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
 
-      -- Daily summaries table
-      CREATE TABLE IF NOT EXISTS daily_summaries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT UNIQUE NOT NULL,
-        total_mpesa_sales REAL DEFAULT 0,
-        total_cash_sales REAL DEFAULT 0,
-        total_mpesa_fees REAL DEFAULT 0,
-        net_mpesa_revenue REAL DEFAULT 0,
-        combined_daily_revenue REAL DEFAULT 0,
-        opening_float REAL DEFAULT 0,
-        closing_float REAL DEFAULT 0,
-        expected_cash_in_till REAL DEFAULT 0,
-        actual_cash_count REAL DEFAULT 0,
-        variance REAL DEFAULT 0,
-        variance_alert BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS daily_summaries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT UNIQUE NOT NULL,
+          total_mpesa_sales REAL DEFAULT 0,
+          total_cash_sales REAL DEFAULT 0,
+          total_mpesa_fees REAL DEFAULT 0,
+          net_mpesa_revenue REAL DEFAULT 0,
+          combined_daily_revenue REAL DEFAULT 0,
+          opening_float REAL DEFAULT 0,
+          closing_float REAL DEFAULT 0,
+          expected_cash_in_till REAL DEFAULT 0,
+          actual_cash_count REAL DEFAULT 0,
+          variance REAL DEFAULT 0,
+          variance_alert BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
 
-      -- Products table for quick product selection
-      CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        category TEXT DEFAULT 'General',
-        is_active BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS products (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          category TEXT DEFAULT 'General',
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
 
-      -- Insert default business settings
-      INSERT OR IGNORE INTO business_settings (id, business_name, alert_threshold) 
-      VALUES (1, 'My Kiosk', 100);
-    `;
-    
-    await db.exec(initScript);
+      // Insert default business settings
+      await db.prepare(`
+        INSERT OR IGNORE INTO business_settings (id, business_name, alert_threshold) 
+        VALUES (1, 'My Kiosk', 100)
+      `).run();
+
+      console.log("Database tables initialized successfully");
+    } catch (error) {
+      console.error("Database initialization failed:", error);
+      throw error;
+    }
   }
 }
 

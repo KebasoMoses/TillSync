@@ -10,8 +10,26 @@ let currentData = {
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
+    checkAuthentication();
 });
+
+async function checkAuthentication() {
+    try {
+        const response = await fetch('/api/auth/me');
+        const result = await response.json();
+        
+        if (result.success) {
+            // User is authenticated, initialize app
+            initializeApp();
+        } else {
+            // Redirect to SaaS landing page
+            window.location.href = 'https://tillsync-saas.pages.dev';
+        }
+    } catch (error) {
+        // Network error or not authenticated, redirect to SaaS
+        window.location.href = 'https://tillsync-saas.pages.dev';
+    }
+}
 
 function initializeApp() {
     // Set current date in header
@@ -155,6 +173,9 @@ function updateDashboardUI() {
     document.getElementById('cash-sales').textContent = formatCurrency(summary.total_cash_sales || 0);
     document.getElementById('total-revenue').textContent = formatCurrency(summary.combined_daily_revenue || 0);
     
+    // Update cash management display
+    updateCashManagementDisplay();
+    
     // Update variance card
     const variance = summary.variance || 0;
     const varianceCard = document.getElementById('variance-card');
@@ -211,7 +232,7 @@ async function parseSMS() {
         
         if (result.success) {
             currentData.parsedTransactions = result.data.transactions;
-            displayParsedResults(result.data);
+            await displayParsedResults(result.data);
             showSuccess(`Parsed ${result.data.validCount} valid transactions out of ${result.data.count} SMS messages`);
         } else {
             showError('Failed to parse SMS: ' + result.error);
@@ -223,7 +244,7 @@ async function parseSMS() {
     }
 }
 
-function displayParsedResults(data) {
+async function displayParsedResults(data) {
     const resultsDiv = document.getElementById('parsed-results');
     const importSection = document.getElementById('import-section');
     
@@ -238,8 +259,47 @@ function displayParsedResults(data) {
         return;
     }
     
+    // Load custom products for the dropdown
+    let customProducts = [];
+    try {
+        const response = await fetch('/api/products');
+        const result = await response.json();
+        if (result.success) {
+            customProducts = result.data || [];
+        }
+    } catch (error) {
+        console.log('Could not load custom products for SMS dropdown');
+    }
+    
     const validTransactions = data.transactions.filter(t => t.isValid);
     const invalidTransactions = data.transactions.filter(t => !t.isValid);
+    
+    // Create product options HTML
+    function generateProductOptions() {
+        let options = `
+            <option value="M-Pesa Payment">M-Pesa Payment (default)</option>
+            <option value="Airtime">Airtime</option>
+            <option value="Sugar">Sugar</option>
+            <option value="Cooking Oil">Cooking Oil</option>
+            <option value="Maize Flour">Maize Flour</option>
+            <option value="Rice">Rice</option>
+            <option value="Bread">Bread</option>
+            <option value="Milk">Milk</option>
+            <option value="Soap">Soap</option>
+            <option value="Tea Leaves">Tea Leaves</option>
+        `;
+        
+        // Add custom products if any
+        if (customProducts.length > 0) {
+            options += `<option disabled>--- Your Products ---</option>`;
+            customProducts.forEach(product => {
+                options += `<option value="${product.name}">${product.name}</option>`;
+            });
+        }
+        
+        options += `<option value="Other">Other</option>`;
+        return options;
+    }
     
     resultsDiv.innerHTML = `
         <div class="space-y-4">
@@ -263,17 +323,7 @@ function displayParsedResults(data) {
                                 <div class="mt-2">
                                     <label class="block text-xs font-medium text-gray-700 mb-1">Product/Service:</label>
                                     <select id="sms-product-${index}" class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-mpesa-green">
-                                        <option value="M-Pesa Payment">M-Pesa Payment (default)</option>
-                                        <option value="Airtime">Airtime</option>
-                                        <option value="Sugar">Sugar</option>
-                                        <option value="Cooking Oil">Cooking Oil</option>
-                                        <option value="Maize Flour">Maize Flour</option>
-                                        <option value="Rice">Rice</option>
-                                        <option value="Bread">Bread</option>
-                                        <option value="Milk">Milk</option>
-                                        <option value="Soap">Soap</option>
-                                        <option value="Tea Leaves">Tea Leaves</option>
-                                        <option value="Other">Other</option>
+                                        ${generateProductOptions()}
                                     </select>
                                 </div>
                             </div>
@@ -440,7 +490,23 @@ async function submitTransaction() {
         if (result.success) {
             showSuccess('Transaction added successfully!');
             resetTransactionForm();
+            
+            // Reload dashboard first
             await loadDashboard();
+            
+            // Then auto-update current cash if this was a cash transaction
+            if (transactionData.transaction_type === 'cash' && transactionData.cash_sale_amount > 0) {
+                // Get current cash input and add the new transaction amount
+                const currentCashInput = document.getElementById('input-current-cash');
+                if (currentCashInput) {
+                    const currentValue = parseFloat(currentCashInput.value) || 0;
+                    const newTotal = currentValue + transactionData.cash_sale_amount;
+                    currentCashInput.value = newTotal;
+                    
+                    // Show notification about auto-update
+                    showSuccess(`Current cash automatically updated: +${formatCurrency(transactionData.cash_sale_amount)}`);
+                }
+            }
         } else {
             showError('Failed to add transaction: ' + result.error);
         }
@@ -1055,17 +1121,30 @@ function updateProductDropdown() {
     updateProductDropdownWithData(userProducts);
 }
 
-function logout() {
-    if (confirm('Are you sure you want to logout? This will clear all your local data.')) {
-        // Clear any stored session data
+async function logout() {
+    if (confirm('Are you sure you want to logout? This will redirect you to the landing page.')) {
+        try {
+            // Call logout API to clear server-side session
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Logout API call failed:', error);
+        }
+        
+        // Clear any stored session data and cookies
         localStorage.clear();
         sessionStorage.clear();
         
-        // In a real app, you might redirect to login page
-        // For now, just show a message and reload
-        showSuccess('Logged out successfully! Refreshing page...');
+        // Clear cookies
+        document.cookie.split(";").forEach(function(c) { 
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+        });
+        
+        // Show logout message
+        showSuccess('Logged out successfully! Redirecting to SaaS landing page...');
+        
+        // Redirect to SaaS landing page immediately
         setTimeout(() => {
-            window.location.reload();
+            window.location.href = 'https://tillsync-saas.pages.dev';
         }, 1500);
     }
 }
@@ -1185,6 +1264,151 @@ function exportReportsToCSV() {
 
 function exportReportsToPDF() {
     showSuccess('PDF export for reports coming soon!');
+}
+
+// Cash Management Functions
+function toggleCashManagement() {
+    const content = document.getElementById('cash-management-content');
+    const icon = document.getElementById('cash-toggle-icon');
+    
+    if (content && icon) {
+        const isHidden = content.classList.contains('hidden');
+        
+        if (isHidden) {
+            content.classList.remove('hidden');
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-up');
+        } else {
+            content.classList.add('hidden');
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
+        }
+    }
+}
+
+async function updateCashManagement() {
+    const openingFloat = parseFloat(document.getElementById('input-opening-float').value) || 0;
+    const currentCash = parseFloat(document.getElementById('input-current-cash').value) || 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+        showLoading(true);
+        
+        const response = await fetch('/api/summary', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                date: today,
+                opening_float: openingFloat,
+                actual_cash_count: currentCash
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Cash management updated successfully!');
+            
+            // Refresh dashboard to show updated values
+            await loadDashboard();
+        } else {
+            showError('Failed to update cash management: ' + result.error);
+        }
+    } catch (error) {
+        showError('Network error updating cash management: ' + error.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function updateCashManagementDisplay() {
+    const { summary } = currentData;
+    
+    if (!summary) return;
+    
+    // Update display values
+    const openingFloat = summary.opening_float || 0;
+    const cashSales = summary.total_cash_sales || 0;
+    const expectedCash = openingFloat + cashSales;
+    const currentCash = summary.actual_cash_count || 0;
+    const variance = currentCash - expectedCash;
+    
+    // Update display elements
+    const elements = {
+        'display-opening-float': formatCurrency(openingFloat),
+        'display-cash-sales': formatCurrency(cashSales),
+        'display-expected-cash': formatCurrency(expectedCash),
+        'display-current-cash': formatCurrency(currentCash)
+    };
+    
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+    
+    // Update input fields
+    const openingFloatInput = document.getElementById('input-opening-float');
+    const currentCashInput = document.getElementById('input-current-cash');
+    
+    if (openingFloatInput) openingFloatInput.value = openingFloat;
+    if (currentCashInput) currentCashInput.value = currentCash;
+    
+    // Update variance analysis
+    const varianceExplanation = document.getElementById('variance-explanation');
+    const varianceStatus = document.getElementById('variance-status');
+    const varianceLabel = document.getElementById('variance-label');
+    
+    if (varianceExplanation) {
+        if (variance === 0) {
+            varianceExplanation.textContent = `Expected ${formatCurrency(expectedCash)} = Current ${formatCurrency(currentCash)} = Balanced`;
+        } else if (variance > 0) {
+            varianceExplanation.textContent = `Current ${formatCurrency(currentCash)} - Expected ${formatCurrency(expectedCash)} = Overage ${formatCurrency(variance)}`;
+        } else {
+            varianceExplanation.textContent = `Expected ${formatCurrency(expectedCash)} - Current ${formatCurrency(currentCash)} = Shortage ${formatCurrency(Math.abs(variance))}`;
+        }
+    }
+    
+    if (varianceStatus) {
+        varianceStatus.textContent = formatCurrency(Math.abs(variance));
+        
+        // Color coding
+        if (variance === 0) {
+            varianceStatus.className = 'text-lg font-bold text-green-600';
+            if (varianceLabel) {
+                varianceLabel.textContent = 'Balanced';
+                varianceLabel.className = 'text-xs text-green-600';
+            }
+        } else if (variance > 0) {
+            varianceStatus.className = 'text-lg font-bold text-blue-600';
+            if (varianceLabel) {
+                varianceLabel.textContent = 'Overage';
+                varianceLabel.className = 'text-xs text-blue-600';
+            }
+        } else {
+            varianceStatus.className = 'text-lg font-bold text-red-600';
+            if (varianceLabel) {
+                varianceLabel.textContent = 'Shortage';
+                varianceLabel.className = 'text-xs text-red-600';
+            }
+        }
+    }
+}
+
+// Auto-update current cash when cash transactions are added
+function autoUpdateCurrentCash(newCashAmount) {
+    const currentCashInput = document.getElementById('input-current-cash');
+    
+    if (currentCashInput) {
+        const currentValue = parseFloat(currentCashInput.value) || 0;
+        const newTotal = currentValue + newCashAmount;
+        currentCashInput.value = newTotal;
+        
+        // Auto-save the updated cash count
+        updateCashManagement();
+    }
 }
 
 // Load products for transaction form dropdown

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { getCookie, setCookie } from 'hono/cookie'
 import { serveStatic } from 'hono/cloudflare-workers'
 import { parseMpesaSMS, parseMultipleSMS, SAMPLE_SMS_FORMATS } from './utils/sms-parser'
 import { calculateMpesaBusinessFee, calculateNetAmount, formatKSh, getAllFeeStructures } from './utils/mpesa-fees'
@@ -15,6 +16,120 @@ app.use('/api/*', cors())
 
 // Serve static files
 app.use('/static/*', serveStatic({ root: './public' }))
+
+// Super simple authentication for demo
+const DEMO_TOKEN = 'tillsync-demo-authenticated-2024'
+
+// Create demo token
+function createDemoToken(): string {
+  return DEMO_TOKEN + '-' + Date.now()
+}
+
+// Verify demo token
+function verifyDemoToken(token: string): boolean {
+  if (!token) return false
+  
+  const parts = token.split('-')
+  if (parts.length < 4) return false
+  
+  const timestamp = parseInt(parts[parts.length - 1])
+  if (!timestamp) return false
+  
+  // Check if token is less than 24 hours old
+  const age = Date.now() - timestamp
+  const maxAge = 24 * 60 * 60 * 1000 // 24 hours
+  
+  return age < maxAge && token.startsWith('tillsync-demo-authenticated')
+}
+
+// Authentication middleware for protected routes
+const authMiddleware = async (c: any, next: any) => {
+  const token = getCookie(c, 'auth-token')
+  
+  if (!token || !verifyDemoToken(token)) {
+    return c.json({ success: false, error: 'Authentication required' }, 401)
+  }
+  
+  c.set('user', { username: 'demo' })
+  await next()
+}
+
+// Auth routes
+app.post('/api/auth/login', async (c) => {
+  const { username, password } = await c.req.json()
+  
+  // Simple demo authentication (replace with real auth)
+  if (username === 'demo' && password === 'demo') {
+    // Create demo token
+    const token = createDemoToken()
+    
+    setCookie(c, 'auth-token', token, {
+      httpOnly: true,
+      secure: true,
+      maxAge: 24 * 60 * 60, // 24 hours
+      sameSite: 'Strict',
+      path: '/'
+    })
+    
+    return c.json({ success: true, user: { username: 'demo' } })
+  }
+  
+  return c.json({ success: false, error: 'Invalid credentials' }, 401)
+})
+
+app.post('/api/auth/logout', (c) => {
+  setCookie(c, 'auth-token', '', { 
+    maxAge: 0,
+    path: '/',
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Strict'
+  })
+  return c.json({ success: true })
+})
+
+// Check authentication status
+app.get('/api/auth/me', authMiddleware, (c) => {
+  const user = c.get('user')
+  return c.json({ success: true, user })
+})
+
+// Authentication redirect handler from SaaS
+app.get('/auth/redirect', async (c) => {
+  const redirectToken = c.req.query('token')
+  
+  if (!redirectToken) {
+    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+  }
+  
+  try {
+    // Decode the redirect token
+    const redirectData = JSON.parse(atob(redirectToken))
+    
+    // Validate the token (ensure it's not too old - 5 minutes max)
+    const maxAge = 5 * 60 * 1000 // 5 minutes
+    if (Date.now() - redirectData.timestamp > maxAge) {
+      return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+    }
+    
+    // Create a local session token for the main app
+    const localToken = createDemoToken()
+    
+    setCookie(c, 'auth-token', localToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: 24 * 60 * 60, // 24 hours
+      sameSite: 'Strict',
+      path: '/'
+    })
+    
+    // Redirect to dashboard
+    return c.redirect('/', 302)
+    
+  } catch (error) {
+    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+  }
+})
 
 // Initialize database tables
 async function initDatabase(db: D1Database) {
@@ -99,8 +214,8 @@ async function initDatabase(db: D1Database) {
 
 // API Routes
 
-// Get today's dashboard data
-app.get('/api/dashboard', async (c) => {
+// Get today's dashboard data (protected)
+app.get('/api/dashboard', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -172,8 +287,8 @@ app.get('/api/dashboard', async (c) => {
   }
 });
 
-// Add new transaction
-app.post('/api/transactions', async (c) => {
+// Add new transaction (protected)
+app.post('/api/transactions', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -213,7 +328,7 @@ app.post('/api/transactions', async (c) => {
       cash_sale_amount || 0,
       product_service || '',
       notes || '',
-      0 // Not verified by default
+      1 // Verified by default
     ).run();
 
     return c.json({
@@ -231,8 +346,8 @@ app.post('/api/transactions', async (c) => {
   }
 });
 
-// Parse SMS and return extracted data
-app.post('/api/sms/parse', async (c) => {
+// Parse SMS and return extracted data (protected)
+app.post('/api/sms/parse', authMiddleware, async (c) => {
   try {
     const body = await c.req.json();
     const { smsContent } = body;
@@ -263,8 +378,8 @@ app.post('/api/sms/parse', async (c) => {
   }
 });
 
-// Import parsed SMS transactions
-app.post('/api/sms/import', async (c) => {
+// Import parsed SMS transactions (protected)
+app.post('/api/sms/import', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -322,7 +437,7 @@ app.post('/api/sms/import', async (c) => {
           transaction.transactionReference,
           mpesa_fee,
           transaction.selectedProduct || 'M-Pesa Payment',
-          0 // Not verified initially
+          1 // Verified by default
         ).run();
 
         imported++;
@@ -349,8 +464,8 @@ app.post('/api/sms/import', async (c) => {
   }
 });
 
-// Update daily summary
-app.put('/api/summary', async (c) => {
+// Update daily summary (protected)
+app.put('/api/summary', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -403,8 +518,8 @@ app.get('/api/sms/samples', async (c) => {
   });
 });
 
-// Get transactions by date range for reports
-app.get('/api/reports/transactions', async (c) => {
+// Get transactions by date range for reports (protected)
+app.get('/api/reports/transactions', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -462,8 +577,8 @@ app.get('/api/reports/transactions', async (c) => {
 
 // Business Settings API Routes
 
-// Get business settings
-app.get('/api/business-settings', async (c) => {
+// Get business settings (protected)
+app.get('/api/business-settings', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -491,8 +606,8 @@ app.get('/api/business-settings', async (c) => {
   }
 });
 
-// Update business settings
-app.put('/api/business-settings', async (c) => {
+// Update business settings (protected)
+app.put('/api/business-settings', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -519,8 +634,8 @@ app.put('/api/business-settings', async (c) => {
 
 // Products API Routes
 
-// Get all products
-app.get('/api/products', async (c) => {
+// Get all products (protected)
+app.get('/api/products', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -541,8 +656,8 @@ app.get('/api/products', async (c) => {
   }
 });
 
-// Add new product
-app.post('/api/products', async (c) => {
+// Add new product (protected)
+app.post('/api/products', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -584,8 +699,8 @@ app.post('/api/products', async (c) => {
   }
 });
 
-// Delete product
-app.delete('/api/products/:id', async (c) => {
+// Delete product (protected)
+app.delete('/api/products/:id', authMiddleware, async (c) => {
   const { DB } = c.env;
   await initDatabase(DB);
   
@@ -608,8 +723,22 @@ app.delete('/api/products/:id', async (c) => {
   }
 });
 
-// Main dashboard route
-app.get('/', (c) => {
+// Main dashboard route (check authentication first)
+app.get('/', async (c) => {
+  // Check if user is authenticated
+  const token = getCookie(c, 'auth-token')
+  
+  if (!token) {
+    // Redirect to SaaS landing page for authentication
+    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+  }
+  
+  // Check if token is valid
+  if (!verifyDemoToken(token)) {
+    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+  }
+  
+  // User is authenticated, show dashboard
   return c.html(`
     <!DOCTYPE html>
     <html lang="en">
@@ -766,6 +895,76 @@ app.get('/', (c) => {
                                 <p class="text-2xl font-bold" id="variance-amount">KSh 0</p>
                             </div>
                             <i class="fas fa-exclamation-triangle text-3xl" id="variance-icon"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cash Management Section -->
+                <div class="bg-white rounded-lg card-shadow mb-6">
+                    <div class="p-4 border-b border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-wallet mr-2 text-mpesa-blue"></i>
+                                Cash Till Management
+                            </h3>
+                            <button onclick="toggleCashManagement()" class="text-mpesa-blue hover:text-mpesa-dark-blue">
+                                <i class="fas fa-chevron-down" id="cash-toggle-icon"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="cash-management-content" class="p-4 hidden">
+                        <!-- Cash Status Display -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div class="bg-blue-50 p-3 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Opening Float</p>
+                                <p class="text-lg font-bold text-blue-600" id="display-opening-float">KSh 0</p>
+                            </div>
+                            <div class="bg-green-50 p-3 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Cash Sales</p>
+                                <p class="text-lg font-bold text-green-600" id="display-cash-sales">KSh 0</p>
+                            </div>
+                            <div class="bg-purple-50 p-3 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Expected Cash</p>
+                                <p class="text-lg font-bold text-purple-600" id="display-expected-cash">KSh 0</p>
+                            </div>
+                            <div class="bg-orange-50 p-3 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Current Cash</p>
+                                <p class="text-lg font-bold text-orange-600" id="display-current-cash">KSh 0</p>
+                            </div>
+                        </div>
+
+                        <!-- Cash Management Form -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Opening Float (KSh)</label>
+                                <input type="number" id="input-opening-float" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="0" step="0.01">
+                                <p class="text-xs text-gray-500 mt-1">Cash you started with today</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Current Cash Count (KSh)</label>
+                                <input type="number" id="input-current-cash" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="0" step="0.01">
+                                <p class="text-xs text-gray-500 mt-1">Physical cash in till right now</p>
+                            </div>
+                            <div class="flex items-end">
+                                <button onclick="updateCashManagement()" class="btn-mpesa text-white px-6 py-2 rounded-lg font-medium w-full">
+                                    <i class="fas fa-save mr-2"></i>Update Cash
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Variance Explanation -->
+                        <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-800">Variance Analysis</p>
+                                    <p class="text-xs text-gray-600" id="variance-explanation">Expected KSh 0 - Current KSh 0 = Variance KSh 0</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-lg font-bold" id="variance-status">KSh 0</p>
+                                    <p class="text-xs" id="variance-label">Balanced</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1407,6 +1606,93 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
         </div>
 
         <script src="/static/app.js"></script>
+    </body>
+    </html>
+    `)
+
+})
+
+// Login page route (if accessed directly)
+app.get('/login', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TillSync - Login</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  'mpesa': {
+                    'green': '#00d13b',
+                    'dark-green': '#00a82f',
+                    'blue': '#0066cc',
+                    'dark-blue': '#004d99'
+                  }
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div class="max-w-md w-full">
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">TillSync</h1>
+                    <p class="text-gray-600">M-Pesa Till Reconciliation System</p>
+                </div>
+                
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                        <input type="text" id="username" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="demo">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                        <input type="password" id="password" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="demo">
+                    </div>
+                    <button type="submit" class="w-full bg-mpesa-green hover:bg-mpesa-dark-green text-white py-2 px-4 rounded-lg transition-colors">
+                        Login
+                    </button>
+                </form>
+                
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-gray-500">Demo credentials: demo / demo</p>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+          document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault()
+            
+            const username = document.getElementById('username').value
+            const password = document.getElementById('password').value
+            
+            try {
+              const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+              })
+              
+              const result = await response.json()
+              
+              if (result.success) {
+                window.location.href = '/'
+              } else {
+                alert('Login failed: ' + result.error)
+              }
+            } catch (error) {
+              alert('Network error: ' + error.message)
+            }
+          })
+        </script>
     </body>
     </html>
   `)

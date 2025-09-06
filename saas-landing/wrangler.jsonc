@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "tillsync-saas-production",
-      "database_id": "placeholder-replace-with-actual-database-id"
+      "database_id": "7c2e07c8-fbee-480b-9ece-1a1b5d1e34ab"
     }
   ],
   // "ai": {

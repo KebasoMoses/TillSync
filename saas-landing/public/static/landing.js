@@ -508,13 +508,30 @@ function setupScrollAnimations() {
 
 // Redirect Functions
 function redirectToDashboard() {
-    // In a real implementation, this would redirect to the main TillSync app
     showSuccess('Redirecting to your TillSync dashboard...');
     
-    // For demo purposes, redirect to the main TillSync app
-    setTimeout(() => {
-        window.location.href = 'https://3000-icy9y2qe478l7gtrq0kot-6532622b.e2b.dev';
-    }, 2000);
+    // Create a temporary redirect token and redirect to main app
+    const token = localStorage.getItem('tillsync_token');
+    const user = localStorage.getItem('tillsync_user');
+    
+    if (token && user) {
+        // Create a one-time redirect token for authentication handoff
+        const redirectData = {
+            token: token,
+            user: user,
+            timestamp: Date.now()
+        };
+        
+        // Encode the redirect data
+        const redirectToken = btoa(JSON.stringify(redirectData));
+        
+        // Redirect to main TillSync app with the redirect token
+        setTimeout(() => {
+            window.location.href = `https://9cf5d93d.tillsync.pages.dev/auth/redirect?token=${redirectToken}`;
+        }, 2000);
+    } else {
+        showError('Authentication error. Please login again.');
+    }
 }
 
 function redirectToPayment() {

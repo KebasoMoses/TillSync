@@ -1,4 +1,4 @@
-// TillSync SaaS Landing Page - Frontend JavaScript
+// Breeva Till Sync SaaS Landing Page - Frontend JavaScript
 // Handles all interactive functionality including auth, pricing, and user engagement
 
 // Global state
@@ -136,7 +136,7 @@ function showDefaultPricing() {
         {
             name: 'daily',
             display_name: 'Daily Trial',
-            description: 'Perfect for testing TillSync with your business',
+            description: 'Perfect for testing Breeva Till Sync with your business',
             price_ksh: 4900,
             features: ['Up to 50 transactions', 'SMS parsing', 'Basic reports', 'Email support'],
             is_trial: true,
@@ -271,13 +271,19 @@ async function handleSignup(e) {
         
         const result = await response.json();
         
+        console.log('Debug - Signup API response:', result);
+        
         if (result.success) {
             // Store user data and token
             currentUser = result.user;
             localStorage.setItem('tillsync_token', result.token);
             localStorage.setItem('tillsync_user', JSON.stringify(result.user));
             
-            showSuccess('Account created successfully! Welcome to TillSync!');
+            // Debug: Verify data was stored
+            console.log('Debug - Stored token:', localStorage.getItem('tillsync_token'));
+            console.log('Debug - Stored user:', localStorage.getItem('tillsync_user'));
+            
+            showSuccess('Account created successfully! Welcome to Breeva Till Sync!');
             hideSignupModal();
             
             // Redirect to dashboard or payment
@@ -326,10 +332,16 @@ async function handleLogin(e) {
         
         const result = await response.json();
         
+        console.log('Debug - Login API response:', result);
+        
         if (result.success) {
             currentUser = result.user;
             localStorage.setItem('tillsync_token', result.token);
             localStorage.setItem('tillsync_user', JSON.stringify(result.user));
+            
+            // Debug: Verify data was stored
+            console.log('Debug - Stored token:', localStorage.getItem('tillsync_token'));
+            console.log('Debug - Stored user:', localStorage.getItem('tillsync_user'));
             
             showSuccess(`Welcome back, ${result.user.full_name}!`);
             hideLoginModal();
@@ -508,28 +520,43 @@ function setupScrollAnimations() {
 
 // Redirect Functions
 function redirectToDashboard() {
-    showSuccess('Redirecting to your TillSync dashboard...');
+    showSuccess('Redirecting to your Breeva Till Sync dashboard...');
     
     // Create a temporary redirect token and redirect to main app
     const token = localStorage.getItem('tillsync_token');
     const user = localStorage.getItem('tillsync_user');
     
+    // Debug logging
+    console.log('Debug - Redirect attempt:');
+    console.log('Token exists:', !!token, 'Token:', token ? token.substring(0, 20) + '...' : 'null');
+    console.log('User exists:', !!user, 'User:', user ? JSON.parse(user).full_name : 'null');
+    
     if (token && user) {
-        // Create a one-time redirect token for authentication handoff
-        const redirectData = {
-            token: token,
-            user: user,
-            timestamp: Date.now()
-        };
-        
-        // Encode the redirect data
-        const redirectToken = btoa(JSON.stringify(redirectData));
-        
-        // Redirect to main TillSync app with the redirect token
-        setTimeout(() => {
-            window.location.href = `https://9cf5d93d.tillsync.pages.dev/auth/redirect?token=${redirectToken}`;
-        }, 2000);
+        try {
+            // Create a one-time redirect token for authentication handoff
+            const redirectData = {
+                token: token,
+                user: user,
+                timestamp: Date.now()
+            };
+            
+            // Encode the redirect data
+            const redirectToken = btoa(JSON.stringify(redirectData));
+            const redirectUrl = `https://app.breeva.co.ke/auth/redirect?token=${redirectToken}`;
+            
+            console.log('Debug - Redirecting to:', redirectUrl);
+            
+            // Redirect to main Breeva Till Sync app with the redirect token
+            setTimeout(() => {
+                console.log('Debug - Executing redirect now...');
+                window.location.href = redirectUrl;
+            }, 2000);
+        } catch (error) {
+            console.error('Debug - Redirect error:', error);
+            showError('Redirect preparation failed. Please try again.');
+        }
     } else {
+        console.error('Debug - Missing authentication data:', { token: !!token, user: !!user });
         showError('Authentication error. Please login again.');
     }
 }
@@ -542,7 +569,7 @@ function redirectToPayment() {
     
     // For demo purposes, simulate payment process
     setTimeout(() => {
-        showSuccess('Payment successful! Welcome to TillSync!');
+        showSuccess('Payment successful! Welcome to Breeva Till Sync!');
         setTimeout(() => {
             redirectToDashboard();
         }, 2000);

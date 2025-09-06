@@ -23,11 +23,11 @@ async function checkAuthentication() {
             initializeApp();
         } else {
             // Redirect to SaaS landing page
-            window.location.href = 'https://tillsync-saas.pages.dev';
+            window.location.href = 'https://breeva.co.ke';
         }
     } catch (error) {
         // Network error or not authenticated, redirect to SaaS
-        window.location.href = 'https://tillsync-saas.pages.dev';
+        window.location.href = 'https://breeva.co.ke';
     }
 }
 
@@ -1144,7 +1144,7 @@ async function logout() {
         
         // Redirect to SaaS landing page immediately
         setTimeout(() => {
-            window.location.href = 'https://tillsync-saas.pages.dev';
+            window.location.href = 'https://breeva.co.ke';
         }, 1500);
     }
 }
@@ -1225,7 +1225,7 @@ function exportReportsToCSV() {
     ];
     
     const csvContent = [
-        `# TillSync Transaction Report - ${periodDescription.toUpperCase()}`,
+        `# Breeva Till Sync Transaction Report - ${periodDescription.toUpperCase()}`,
         `# Generated on: ${new Date().toLocaleString('en-KE')}`,
         `# Total Transactions: ${transactions.length}`,
         `# Total Revenue: KSh ${(currentData.summary?.combined_daily_revenue || 0).toLocaleString('en-KE')}`,

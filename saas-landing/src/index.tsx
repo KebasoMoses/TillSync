@@ -85,7 +85,7 @@ async function initDatabase(db: D1Database) {
 
       // Insert subscription plans individually
       const plans = [
-        ['daily', 'Daily Trial', 'Perfect for testing TillSync with your business', 4900, 1, '["Up to 50 transactions", "SMS parsing", "Basic reports", "Email support"]', 1, 0],
+        ['daily', 'Daily Trial', 'Perfect for testing Breeva Till Sync with your business', 4900, 1, '["Up to 50 transactions", "SMS parsing", "Basic reports", "Email support"]', 1, 0],
         ['weekly', 'Weekly Plan', 'Great for small kiosks and cafés', 10000, 7, '["Unlimited transactions", "SMS parsing", "Advanced reports", "Variance alerts", "Email support"]', 0, 0],
         ['monthly', 'Monthly Plan', 'Most popular for growing businesses', 35000, 30, '["Unlimited transactions", "SMS parsing", "Advanced reports", "Variance alerts", "Priority support", "Data export"]', 0, 1],
         ['yearly', 'Yearly Plan', 'Best value for established businesses', 350000, 365, '["Everything in Monthly", "Custom integrations", "Dedicated support", "Business analytics", "Multi-user access", "API access"]', 0, 0]
@@ -338,11 +338,11 @@ app.get('/', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TillSync - Transform Your M-Pesa Business Today</title>
-        <meta name="description" content="Stop losing KSh 200-500 daily! TillSync helps Kenyan businesses reconcile M-Pesa transactions in 5 minutes. Join 1000+ successful businesses.">
+        <title>Breeva Till Sync - Transform Your M-Pesa Business Today</title>
+        <meta name="description" content="Stop losing KSh 200-500 daily! Breeva Till Sync helps Kenyan businesses reconcile M-Pesa transactions in 5 minutes. Join 1000+ successful businesses.">
         
         <!-- SEO Meta Tags -->
-        <meta property="og:title" content="TillSync - M-Pesa Reconciliation Made Simple">
+        <meta property="og:title" content="Breeva Till Sync - M-Pesa Reconciliation Made Simple">
         <meta property="og:description" content="Eliminate profit leakage and save 25 minutes daily with automated M-Pesa SMS parsing and reconciliation.">
         <meta property="og:image" content="/static/og-image.jpg">
         <meta property="og:url" content="https://tillsync.co.ke">
@@ -447,7 +447,7 @@ app.get('/', (c) => {
                             <i class="fas fa-mobile-alt text-white text-xl"></i>
                         </div>
                         <div>
-                            <h1 class="text-xl font-bold gradient-text">TillSync</h1>
+                            <h1 class="text-xl font-bold gradient-text">Breeva Till Sync</h1>
                             <p class="text-xs text-gray-500">M-Pesa Reconciliation</p>
                         </div>
                     </div>
@@ -502,7 +502,7 @@ app.get('/', (c) => {
                         <p class="text-xl text-gray-600 mb-8 leading-relaxed">
                             Transform your M-Pesa reconciliation from 30 minutes of manual work to 
                             <strong class="text-mpesa-green">5 minutes of automated precision</strong>. 
-                            TillSync helps Kenyan businesses eliminate profit leakage and save time.
+                            Breeva Till Sync helps Kenyan businesses eliminate profit leakage and save time.
                         </p>
                         
                         <div class="flex flex-col sm:flex-row gap-4 mb-8">
@@ -538,7 +538,7 @@ app.get('/', (c) => {
                                 <!-- Mock Dashboard Screenshot -->
                                 <div class="bg-gradient-to-r from-mpesa-green to-mpesa-blue p-4 text-white">
                                     <div class="flex items-center justify-between">
-                                        <h3 class="font-semibold">TillSync Dashboard</h3>
+                                        <h3 class="font-semibold">Breeva Till Sync Dashboard</h3>
                                         <div class="text-sm">Today: KSh 15,430</div>
                                     </div>
                                 </div>
@@ -596,7 +596,7 @@ app.get('/', (c) => {
                 
                 <div class="grid md:grid-cols-2 gap-12 items-center mb-20">
                     <div class="space-y-6">
-                        <h3 class="text-3xl font-bold text-red-600 mb-6">😓 Before TillSync</h3>
+                        <h3 class="text-3xl font-bold text-red-600 mb-6">😓 Before Breeva Till Sync</h3>
                         <div class="space-y-4">
                             <div class="flex items-start space-x-4 p-4 bg-red-50 rounded-lg">
                                 <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -638,7 +638,7 @@ app.get('/', (c) => {
                     </div>
                     
                     <div class="space-y-6">
-                        <h3 class="text-3xl font-bold text-mpesa-green mb-6">🚀 After TillSync</h3>
+                        <h3 class="text-3xl font-bold text-mpesa-green mb-6">🚀 After Breeva Till Sync</h3>
                         <div class="space-y-4">
                             <div class="flex items-start space-x-4 p-4 bg-green-50 rounded-lg">
                                 <div class="w-8 h-8 bg-mpesa-green rounded-full flex items-center justify-center flex-shrink-0">
@@ -682,7 +682,7 @@ app.get('/', (c) => {
                 
                 <div class="text-center bg-gradient-to-r from-mpesa-green to-mpesa-blue rounded-2xl p-8 text-white">
                     <h3 class="text-3xl font-bold mb-4">Stop Losing Money Today!</h3>
-                    <p class="text-xl mb-6">Join 1000+ successful Kenyan businesses using TillSync</p>
+                    <p class="text-xl mb-6">Join 1000+ successful Kenyan businesses using Breeva Till Sync</p>
                     <button onclick="showSignupModal()" class="bg-white text-mpesa-green px-8 py-3 rounded-lg font-semibold text-lg hover:shadow-xl transition-all transform hover:scale-105">
                         Start Your Free Trial - Only KSh 49
                     </button>
@@ -846,7 +846,7 @@ app.get('/', (c) => {
                         Success Stories from <span class="gradient-text">Real Kenyan Businesses</span>
                     </h2>
                     <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-                        Join hundreds of successful business owners who've transformed their M-Pesa management with TillSync.
+                        Join hundreds of successful business owners who've transformed their M-Pesa management with Breeva Till Sync.
                     </p>
                 </div>
                 
@@ -865,7 +865,7 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <p class="text-gray-700 mb-4">
-                            "TillSync saved my business! I was losing KSh 300 daily without knowing. 
+                            "Breeva Till Sync saved my business! I was losing KSh 300 daily without knowing. 
                             In one month, I recovered KSh 9,000. Now I reconcile in 5 minutes instead of 45."
                         </p>
                         <div class="text-sm text-gray-500">
@@ -888,7 +888,7 @@ app.get('/', (c) => {
                         </div>
                         <p class="text-gray-700 mb-4">
                             "The variance alerts are a game-changer! Caught my employee taking KSh 200 daily. 
-                            TillSync paid for itself in the first week."
+                            Breeva Till Sync paid for itself in the first week."
                         </p>
                         <div class="text-sm text-gray-500">
                             <strong>Results:</strong> Caught theft • Saved KSh 6,000/month • Peace of mind
@@ -909,7 +909,7 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <p class="text-gray-700 mb-4">
-                            "Got a bank loan using TillSync reports! Clean financial records impressed the bank manager. 
+                            "Got a bank loan using Breeva Till Sync reports! Clean financial records impressed the bank manager. 
                             Best investment for my business growth."
                         </p>
                         <div class="text-sm text-gray-500">
@@ -931,7 +931,7 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <p class="text-gray-700 mb-4">
-                            "Handling 150+ M-Pesa transactions daily was nightmare. TillSync made it effortless. 
+                            "Handling 150+ M-Pesa transactions daily was nightmare. Breeva Till Sync made it effortless. 
                             My evenings are free now!"
                         </p>
                         <div class="text-sm text-gray-500">
@@ -975,7 +975,7 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <p class="text-gray-700 mb-4">
-                            "Managing 3 shops was chaos. TillSync gives me consolidated reports for all outlets. 
+                            "Managing 3 shops was chaos. Breeva Till Sync gives me consolidated reports for all outlets. 
                             Now I know which shop is most profitable!"
                         </p>
                         <div class="text-sm text-gray-500">
@@ -1001,7 +1001,7 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <p class="text-gray-700 font-medium">
-                            Join the growing community of successful Kenyan entrepreneurs using TillSync
+                            Join the growing community of successful Kenyan entrepreneurs using Breeva Till Sync
                         </p>
                     </div>
                 </div>
@@ -1060,7 +1060,7 @@ app.get('/', (c) => {
                                 <i class="fas fa-mobile-alt text-white text-xl"></i>
                             </div>
                             <div>
-                                <h3 class="text-xl font-bold">TillSync</h3>
+                                <h3 class="text-xl font-bold">Breeva Till Sync</h3>
                                 <p class="text-sm text-gray-400">M-Pesa Reconciliation</p>
                             </div>
                         </div>
@@ -1131,7 +1131,7 @@ app.get('/', (c) => {
                 
                 <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
                     <div class="text-gray-400 text-sm mb-4 md:mb-0">
-                        © 2025 TillSync. All rights reserved. Built with ❤️ for Kenyan entrepreneurs.
+                        © 2025 Breeva Till Sync. All rights reserved. Built with ❤️ for Kenyan entrepreneurs.
                     </div>
                     <div class="flex space-x-6 text-sm text-gray-400">
                         <a href="#" class="hover:text-mpesa-green transition-colors">Privacy Policy</a>
@@ -1219,7 +1219,7 @@ app.get('/', (c) => {
                         <i class="fas fa-sign-in-alt text-white text-2xl"></i>
                     </div>
                     <h2 class="text-2xl font-bold text-gray-900">Welcome Back</h2>
-                    <p class="text-gray-600 mt-2">Sign in to your TillSync account</p>
+                    <p class="text-gray-600 mt-2">Sign in to your Breeva Till Sync account</p>
                 </div>
                 
                 <form id="login-form" class="space-y-4">
@@ -1266,7 +1266,7 @@ app.get('/', (c) => {
                         <i class="fas fa-users text-white text-2xl"></i>
                     </div>
                     <h2 class="text-2xl font-bold text-gray-900">Join Beta Waitlist</h2>
-                    <p class="text-gray-600 mt-2">Get early access to TillSync Pro features</p>
+                    <p class="text-gray-600 mt-2">Get early access to Breeva Till Sync Pro features</p>
                 </div>
                 
                 <form id="waitlist-form" class="space-y-4">

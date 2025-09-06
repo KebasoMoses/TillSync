@@ -99,7 +99,7 @@ app.get('/auth/redirect', async (c) => {
   const redirectToken = c.req.query('token')
   
   if (!redirectToken) {
-    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+    return c.redirect('https://breeva.co.ke', 302)
   }
   
   try {
@@ -109,7 +109,7 @@ app.get('/auth/redirect', async (c) => {
     // Validate the token (ensure it's not too old - 5 minutes max)
     const maxAge = 5 * 60 * 1000 // 5 minutes
     if (Date.now() - redirectData.timestamp > maxAge) {
-      return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+      return c.redirect('https://breeva.co.ke', 302)
     }
     
     // Create a local session token for the main app
@@ -127,7 +127,7 @@ app.get('/auth/redirect', async (c) => {
     return c.redirect('/', 302)
     
   } catch (error) {
-    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+    return c.redirect('https://breeva.co.ke', 302)
   }
 })
 
@@ -730,12 +730,12 @@ app.get('/', async (c) => {
   
   if (!token) {
     // Redirect to SaaS landing page for authentication
-    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+    return c.redirect('https://breeva.co.ke', 302)
   }
   
   // Check if token is valid
   if (!verifyDemoToken(token)) {
-    return c.redirect('https://5fad663e.tillsync-saas.pages.dev', 302)
+    return c.redirect('https://breeva.co.ke', 302)
   }
   
   // User is authenticated, show dashboard
@@ -745,7 +745,7 @@ app.get('/', async (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TillSync - M-Pesa Till Reconciliation System</title>
+        <title>Breeva Till Sync - M-Pesa Till Reconciliation System</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -800,7 +800,7 @@ app.get('/', async (c) => {
                     <div class="flex items-center space-x-3">
                         <i class="fas fa-mobile-alt text-2xl"></i>
                         <div>
-                            <h1 class="text-2xl font-bold">TillSync</h1>
+                            <h1 class="text-2xl font-bold">Breeva Till Sync</h1>
                             <p class="text-mpesa-light-gray text-sm">M-Pesa Till Reconciliation System</p>
                         </div>
                     </div>
@@ -1620,7 +1620,7 @@ app.get('/login', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TillSync - Login</title>
+        <title>Breeva Till Sync - Login</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
           tailwind.config = {
@@ -1643,7 +1643,7 @@ app.get('/login', (c) => {
         <div class="max-w-md w-full">
             <div class="bg-white rounded-lg shadow-lg p-8">
                 <div class="text-center mb-8">
-                    <h1 class="text-3xl font-bold text-gray-800 mb-2">TillSync</h1>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">Breeva Till Sync</h1>
                     <p class="text-gray-600">M-Pesa Till Reconciliation System</p>
                 </div>
                 

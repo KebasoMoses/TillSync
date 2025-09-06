@@ -76,6 +76,16 @@ async function initDatabase(db: D1Database) {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Products table for quick product selection
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        category TEXT DEFAULT 'General',
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Insert default business settings
       INSERT OR IGNORE INTO business_settings (id, business_name, alert_threshold) 
       VALUES (1, 'My Kiosk', 100);
@@ -385,6 +395,154 @@ app.get('/api/sms/samples', async (c) => {
   });
 });
 
+// Business Settings API Routes
+
+// Get business settings
+app.get('/api/business-settings', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  try {
+    const settings = await DB.prepare(`
+      SELECT * FROM business_settings WHERE id = 1
+    `).first();
+    
+    return c.json({
+      success: true,
+      data: settings || {
+        business_name: 'My Kiosk',
+        mpesa_till_number: '',
+        owner_name: '',
+        phone_number: '',
+        daily_target: 0,
+        alert_threshold: 100
+      }
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Update business settings
+app.put('/api/business-settings', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  try {
+    const body = await c.req.json();
+    const { business_name, mpesa_till_number, owner_name, phone_number, daily_target, alert_threshold } = body;
+    
+    await DB.prepare(`
+      INSERT OR REPLACE INTO business_settings (id, business_name, mpesa_till_number, owner_name, phone_number, daily_target, alert_threshold, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(business_name, mpesa_till_number, owner_name, phone_number, daily_target || 0, alert_threshold || 100).run();
+    
+    return c.json({
+      success: true,
+      message: 'Business settings updated successfully'
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Products API Routes
+
+// Get all products
+app.get('/api/products', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  try {
+    const products = await DB.prepare(`
+      SELECT * FROM products WHERE is_active = 1 ORDER BY name ASC
+    `).all();
+    
+    return c.json({
+      success: true,
+      data: products.results || []
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Add new product
+app.post('/api/products', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  try {
+    const body = await c.req.json();
+    const { name, category } = body;
+    
+    if (!name) {
+      return c.json({
+        success: false,
+        error: 'Product name is required'
+      }, 400);
+    }
+    
+    const result = await DB.prepare(`
+      INSERT INTO products (name, category) VALUES (?, ?)
+    `).bind(name.trim(), category || 'General').run();
+    
+    return c.json({
+      success: true,
+      data: {
+        id: result.meta.last_row_id,
+        name: name.trim(),
+        category: category || 'General'
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({
+        success: false,
+        error: 'Product already exists'
+      }, 400);
+    }
+    
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Delete product
+app.delete('/api/products/:id', async (c) => {
+  const { DB } = c.env;
+  await initDatabase(DB);
+  
+  try {
+    const id = c.req.param('id');
+    
+    await DB.prepare(`
+      UPDATE products SET is_active = 0 WHERE id = ?
+    `).bind(id).run();
+    
+    return c.json({
+      success: true,
+      message: 'Product removed successfully'
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
 // Main dashboard route
 app.get('/', (c) => {
   return c.html(`
@@ -464,21 +622,36 @@ app.get('/', (c) => {
         <main class="container mx-auto px-4 py-8">
             <!-- Navigation Tabs -->
             <div class="bg-white rounded-lg shadow-md mb-6">
-                <nav class="flex border-b">
-                    <button class="tab-button px-6 py-3 font-medium text-mpesa-blue border-b-2 border-mpesa-green bg-mpesa-light-gray" data-tab="dashboard">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                <nav class="flex flex-wrap border-b overflow-x-auto">
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-mpesa-blue border-b-2 border-mpesa-green bg-mpesa-light-gray flex-shrink-0 text-sm md:text-base" data-tab="dashboard">
+                        <i class="fas fa-tachometer-alt mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">Dashboard</span>
+                        <span class="sm:hidden">Dash</span>
                     </button>
-                    <button class="tab-button px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue" data-tab="sms-import">
-                        <i class="fas fa-sms mr-2"></i>SMS Import
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue flex-shrink-0 text-sm md:text-base" data-tab="sms-import">
+                        <i class="fas fa-sms mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">SMS Import</span>
+                        <span class="sm:hidden">SMS</span>
                     </button>
-                    <button class="tab-button px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue" data-tab="transactions">
-                        <i class="fas fa-list mr-2"></i>Add Transaction
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue flex-shrink-0 text-sm md:text-base" data-tab="transactions">
+                        <i class="fas fa-list mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">Add Transaction</span>
+                        <span class="sm:hidden">Add</span>
                     </button>
-                    <button class="tab-button px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue" data-tab="reports">
-                        <i class="fas fa-chart-bar mr-2"></i>Reports
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue flex-shrink-0 text-sm md:text-base" data-tab="reports">
+                        <i class="fas fa-chart-bar mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">Reports</span>
+                        <span class="sm:hidden">Reports</span>
                     </button>
-                    <button class="tab-button px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue" data-tab="help">
-                        <i class="fas fa-question-circle mr-2"></i>Help
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue flex-shrink-0 text-sm md:text-base" data-tab="help">
+                        <i class="fas fa-question-circle mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">Help</span>
+                        <span class="sm:hidden">Help</span>
+                    </button>
+                    <button class="tab-button px-3 md:px-6 py-3 font-medium text-gray-600 hover:text-mpesa-blue flex-shrink-0 text-sm md:text-base" data-tab="profile">
+                        <i class="fas fa-user-cog mr-1 md:mr-2"></i>
+                        <span class="hidden sm:inline">Profile</span>
+                        <span class="sm:hidden">Profile</span>
                     </button>
                 </nav>
             </div>
@@ -545,23 +718,81 @@ app.get('/', (c) => {
                             </button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="transactions-table" class="bg-white divide-y divide-gray-200">
-                                <!-- Transactions will be loaded here -->
-                            </tbody>
-                        </table>
+                    <!-- Search and Controls -->
+                    <div class="mb-4 flex flex-col sm:flex-row gap-2 sm:gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="search-transactions" placeholder="Search transactions..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent text-sm">
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="sort-transactions" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
+                                <option value="">Sort by...</option>
+                                <option value="time-desc">Time (Newest)</option>
+                                <option value="time-asc">Time (Oldest)</option>
+                                <option value="amount-desc">Amount (High-Low)</option>
+                                <option value="amount-asc">Amount (Low-High)</option>
+                                <option value="customer">Customer Name</option>
+                            </select>
+                            <select id="rows-per-page" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
+                                <option value="10">10 rows</option>
+                                <option value="25">25 rows</option>
+                                <option value="50">50 rows</option>
+                                <option value="100">100 rows</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Mobile-First Responsive Table -->
+                    <div class="w-full">
+                        <!-- Desktop Table View -->
+                        <div class="hidden md:block overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onclick="sortTable('time')">
+                                            Time <i class="fas fa-sort ml-1"></i>
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onclick="sortTable('type')">
+                                            Type <i class="fas fa-sort ml-1"></i>
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onclick="sortTable('customer')">
+                                            Customer <i class="fas fa-sort ml-1"></i>
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onclick="sortTable('amount')">
+                                            Amount <i class="fas fa-sort ml-1"></i>
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactions-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Transactions will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mobile Card View -->
+                        <div class="md:hidden">
+                            <div id="transactions-mobile" class="space-y-3">
+                                <!-- Mobile transaction cards will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-2">
+                            <div class="text-sm text-gray-700">
+                                Showing <span id="showing-start">1</span> to <span id="showing-end">10</span> of <span id="total-transactions">0</span> transactions
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="prev-page" class="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    <i class="fas fa-chevron-left"></i> Previous
+                                </button>
+                                <span id="page-info" class="px-3 py-2 text-sm">Page 1 of 1</span>
+                                <button id="next-page" class="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Next <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -709,23 +940,137 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
 
             <!-- Reports Tab Content -->
             <div id="reports-content" class="tab-content hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <!-- Summary Statistics -->
-                    <div class="bg-white rounded-lg card-shadow p-6">
-                        <h2 class="text-xl font-semibold text-gray-800 mb-4">
-                            <i class="fas fa-chart-pie mr-2 text-mpesa-blue"></i>
-                            Revenue Breakdown
-                        </h2>
-                        <canvas id="revenue-chart" width="400" height="300"></canvas>
+                <div class="max-w-7xl mx-auto">
+                    <!-- Reports Header -->
+                    <div class="bg-white rounded-lg card-shadow p-6 mb-6">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <h2 class="text-2xl font-semibold text-gray-800">
+                                <i class="fas fa-chart-bar mr-2 text-mpesa-blue"></i>
+                                Business Reports & Analytics
+                            </h2>
+                            <div class="flex gap-2">
+                                <select id="report-period" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green text-sm">
+                                    <option value="today">Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                </select>
+                                <button onclick="refreshReports()" class="bg-mpesa-blue hover:bg-mpesa-dark-blue text-white px-4 py-2 rounded-lg text-sm">
+                                    <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Weekly Trend -->
-                    <div class="bg-white rounded-lg card-shadow p-6">
-                        <h2 class="text-xl font-semibold text-gray-800 mb-4">
-                            <i class="fas fa-chart-line mr-2 text-mpesa-green"></i>
-                            Daily Revenue Trend
-                        </h2>
-                        <canvas id="trend-chart" width="400" height="300"></canvas>
+                    <!-- Key Metrics Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm font-medium">Total Revenue</p>
+                                    <p class="text-2xl font-bold text-mpesa-dark-green" id="report-total-revenue">KSh 0</p>
+                                </div>
+                                <i class="fas fa-money-bill-wave text-3xl text-mpesa-green"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm font-medium">M-Pesa Revenue</p>
+                                    <p class="text-2xl font-bold text-green-600" id="report-mpesa-revenue">KSh 0</p>
+                                </div>
+                                <i class="fas fa-mobile-alt text-3xl text-green-500"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm font-medium">Cash Revenue</p>
+                                    <p class="text-2xl font-bold text-blue-600" id="report-cash-revenue">KSh 0</p>
+                                </div>
+                                <i class="fas fa-coins text-3xl text-blue-500"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm font-medium">Transactions</p>
+                                    <p class="text-2xl font-bold text-gray-800" id="report-transaction-count">0</p>
+                                </div>
+                                <i class="fas fa-receipt text-3xl text-gray-500"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                        <!-- Revenue Breakdown Chart -->
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-chart-pie mr-2 text-mpesa-blue"></i>
+                                Revenue Sources
+                            </h3>
+                            <div class="relative" style="height: 300px;">
+                                <canvas id="revenue-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Transaction Types Chart -->
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-chart-bar mr-2 text-mpesa-green"></i>
+                                Transaction Volume
+                            </h3>
+                            <div class="relative" style="height: 300px;">
+                                <canvas id="volume-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Tables -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- Top Products -->
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-star mr-2 text-yellow-500"></i>
+                                Top Products/Services
+                            </h3>
+                            <div id="top-products" class="space-y-3">
+                                <div class="text-gray-500 text-sm text-center py-4">Loading products data...</div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Methods -->
+                        <div class="bg-white rounded-lg card-shadow p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-credit-card mr-2 text-mpesa-blue"></i>
+                                Payment Method Breakdown
+                            </h3>
+                            <div id="payment-methods" class="space-y-3">
+                                <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-mobile-alt text-green-600 mr-2"></i>
+                                        <span class="font-medium">M-Pesa</span>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-bold text-green-600" id="mpesa-percentage">0%</div>
+                                        <div class="text-sm text-gray-600" id="mpesa-amount">KSh 0</div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-coins text-blue-600 mr-2"></i>
+                                        <span class="font-medium">Cash</span>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-bold text-blue-600" id="cash-percentage">0%</div>
+                                        <div class="text-sm text-gray-600" id="cash-amount">KSh 0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -842,6 +1187,127 @@ NLJ7RT545 Confirmed. Ksh500.00 received from JOHN KAMAU 254722123456. Account ba
                                     <p><strong>Version:</strong> 1.0</p>
                                     <p><strong>Target Users:</strong> Kenyan retail kiosks, food cafés, and small businesses</p>
                                     <p><strong>Data Storage:</strong> All data is stored securely in your browser and cloud database</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Tab Content -->
+            <div id="profile-content" class="tab-content hidden">
+                <div class="max-w-4xl mx-auto">
+                    <!-- Profile Header -->
+                    <div class="bg-white rounded-lg card-shadow p-6 mb-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-xl font-semibold text-gray-800">
+                                <i class="fas fa-user-cog mr-2 text-mpesa-blue"></i>
+                                Profile & Settings
+                            </h2>
+                            <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                                <i class="fas fa-sign-out-alt mr-2"></i>
+                                Logout
+                            </button>
+                        </div>
+                        
+                        <!-- Business Information -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                    <i class="fas fa-store mr-2 text-mpesa-green"></i>
+                                    Business Information
+                                </h3>
+                                <form id="business-settings-form" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
+                                        <input type="text" id="business-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="My Kiosk">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">M-Pesa Till Number</label>
+                                        <input type="text" id="till-number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="123456">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Owner Name</label>
+                                        <input type="text" id="owner-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="John Kamau">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                                        <input type="tel" id="phone-number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="+254 712 345 678">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Daily Sales Target (KSh)</label>
+                                        <input type="number" id="daily-target" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-green focus:border-transparent" placeholder="5000">
+                                    </div>
+                                    <button type="submit" class="bg-mpesa-green hover:bg-mpesa-dark-green text-white px-6 py-2 rounded-lg transition-colors">
+                                        <i class="fas fa-save mr-2"></i>
+                                        Save Business Settings
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                    <i class="fas fa-box mr-2 text-mpesa-blue"></i>
+                                    Product Management
+                                </h3>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Add New Product/Service</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="new-product-name" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mpesa-blue focus:border-transparent" placeholder="Product name">
+                                        <button onclick="addProduct()" class="bg-mpesa-blue hover:bg-mpesa-dark-blue text-white px-4 py-2 rounded-lg transition-colors">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Products List -->
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-800 mb-3">Your Products/Services</h4>
+                                    <div id="products-list" class="space-y-2">
+                                        <!-- Products will be loaded here -->
+                                        <div class="text-gray-500 text-sm">No products added yet. Add your first product above.</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Quick Add Common Products -->
+                                <div class="mt-4">
+                                    <h4 class="font-medium text-gray-800 mb-3">Quick Add Common Items</h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button onclick="addProduct('Soda')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Soda</button>
+                                        <button onclick="addProduct('Bread')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Bread</button>
+                                        <button onclick="addProduct('Milk')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Milk</button>
+                                        <button onclick="addProduct('Airtime')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Airtime</button>
+                                        <button onclick="addProduct('Sugar')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Sugar</button>
+                                        <button onclick="addProduct('Tea Leaves')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-full text-sm transition-colors">Tea Leaves</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Settings -->
+                    <div class="bg-white rounded-lg card-shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-cogs mr-2 text-gray-600"></i>
+                            System Settings
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Variance Alert Threshold (KSh)</label>
+                                <input type="number" id="alert-threshold" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" placeholder="100">
+                                <p class="text-xs text-gray-500 mt-1">Alert when cash variance exceeds this amount</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Data Export</label>
+                                <div class="space-y-2">
+                                    <button onclick="exportData('csv')" class="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors">
+                                        <i class="fas fa-file-csv mr-2"></i>
+                                        Export to CSV
+                                    </button>
+                                    <button onclick="exportData('pdf')" class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                                        <i class="fas fa-file-pdf mr-2"></i>
+                                        Export to PDF
+                                    </button>
                                 </div>
                             </div>
                         </div>

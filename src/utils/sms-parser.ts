@@ -156,10 +156,39 @@ function convertTo12Hour(time24: string): string {
 
 // Parse multiple SMS messages from a text block
 export function parseMultipleSMS(smsBlock: string): ParsedTransaction[] {
-  // Split by common SMS delimiters
-  const messages = smsBlock
-    .split(/\n\n|\n(?=[A-Z0-9]{8,12}\s+Confirmed)/i)
-    .filter(msg => msg.trim().length > 0);
+  // First normalize line endings and clean up the input
+  const cleanBlock = smsBlock
+    .replace(/\r\n/g, '\n')  // Convert Windows line endings
+    .replace(/\r/g, '\n')    // Convert Mac line endings
+    .trim();
+
+  // Split by multiple strategies:
+  // 1. Double newlines (\n\n)
+  // 2. When a new transaction pattern starts (reference + Confirmed)
+  // 3. Handle escaped newlines \\n\\n as actual newlines
+  let messages = cleanBlock
+    .replace(/\\n\\n/g, '\n\n')  // Convert literal \\n\\n to actual newlines
+    .replace(/\\n/g, '\n')       // Convert literal \\n to actual newlines
+    .split(/\n\n+|\n(?=[A-Z0-9]{8,12}\s+Confirmed)/i)
+    .map(msg => msg.trim())
+    .filter(msg => msg.length > 0);
+
+  // Additional fallback: if we only got one message but it contains multiple transaction references
+  if (messages.length === 1) {
+    const singleMessage = messages[0];
+    const references = (singleMessage.match(/[A-Z0-9]{8,12}\s+Confirmed/gi) || []);
+    
+    if (references.length > 1) {
+      // Try to split by transaction reference patterns
+      const parts = singleMessage.split(/(?=[A-Z0-9]{8,12}\s+Confirmed)/i);
+      if (parts.length > 1) {
+        messages = parts.map(part => part.trim()).filter(part => part.length > 0);
+      }
+    }
+  }
+
+  console.log('Parsed messages:', messages.length, 'messages found');
+  messages.forEach((msg, i) => console.log(`Message ${i + 1}:`, msg.substring(0, 50) + '...'));
 
   return messages.map(sms => parseMpesaSMS(sms));
 }
